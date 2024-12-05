@@ -144,7 +144,7 @@ class Router:
         # Store the packet's delay and loss info
         self.received_data.append({
             'data_size': data_size,
-            'packet_loss': packet_loss,
+            'packet_loss': packet_loss, # Boolean
             'delay': packet_delay
         })
 
@@ -342,7 +342,8 @@ def simulate_traffic(num_iterations):
         total_time = 10  # Time period per iteration
         num_packets = np.random.poisson(lam * total_time)
 
-        # Generate inter-arrival times using Exponential distribution
+        # Generate inter-arrival times using Exponential distribution based on
+        # poisson distrubution
         inter_arrival_times = np.random.exponential(scale=1 / lam, size=num_packets)
 
         # Calculate cumulative arrival times, starting from the last arrival time
@@ -358,6 +359,7 @@ def simulate_traffic(num_iterations):
             current_time += total_time  # Move to the next iteration's start time if no packets
 
         print(f"Number of packets to send: {len(arrival_times)}")
+        print("arrival times: \n" + str(arrival_times))
 
         # Simulate sending the packets at their arrival times
         for packet_time in arrival_times:
@@ -403,7 +405,7 @@ def simulate_traffic(num_iterations):
         current_time += total_time
 
 # Run the simulation
-simulate_traffic(num_iterations=90)
+simulate_traffic(1)
 
 # Plotting
 iterations = list(range(1, len(probabilities_over_time) + 1))
