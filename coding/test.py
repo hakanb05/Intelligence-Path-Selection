@@ -329,6 +329,7 @@ reward_over_time = []
 max_delay = 5  # Adjust based on expected maximum delay in the network
 
 # Function to simulate network traffic and Smart Router's learning
+# Function to simulate network traffic with Poisson and Exponential distributions
 def simulate_traffic(num_iterations):
     current_time = 0  # Initialize simulation time
 
@@ -336,27 +337,25 @@ def simulate_traffic(num_iterations):
         print(f"\nIteration {i+1}")
         path = []
 
-        # Generate number of packets using both distributions
-        lam = 5  # Average rate for Poisson
-        num_packets_poisson = np.random.poisson(lam)
+        # Generate number of packets using Poisson distribution
+        lam = 5  # Average rate (events per time unit)
+        total_time = 10  # Time period per iteration
+        num_packets = np.random.poisson(lam * total_time)
 
-        # Generate arrival times for Poisson-distributed packets uniformly over total_time
-        total_time = 10  # Total simulation time per iteration
-        arrival_times_poisson = np.random.uniform(current_time, current_time + total_time, num_packets_poisson)
+        # Generate inter-arrival times using Exponential distribution
+        inter_arrival_times = np.random.exponential(scale=1 / lam, size=num_packets)
 
-        # Generate arrival times using Exponential distribution
-        scale = 1  # Mean inter-arrival time
-        arrival_times_exponential = []
-        current_time_in_iteration = current_time
-        while current_time_in_iteration < current_time + total_time:
-            inter_arrival_time = np.random.exponential(scale)
-            current_time_in_iteration += inter_arrival_time
-            if current_time_in_iteration < current_time + total_time:
-                arrival_times_exponential.append(current_time_in_iteration)
+        # Calculate cumulative arrival times, starting from the last arrival time
+        arrival_times = current_time + np.cumsum(inter_arrival_times)
 
-        # Combine and sort all arrival times
-        arrival_times = np.concatenate((arrival_times_poisson, arrival_times_exponential))
-        arrival_times.sort()
+        # Filter arrival times to ensure they fall within the current iteration's period
+        arrival_times = arrival_times[arrival_times <= current_time + total_time]
+
+        # Update current_time to the last arrival time in this iteration
+        if len(arrival_times) > 0:
+            current_time = arrival_times[-1]
+        else:
+            current_time += total_time  # Move to the next iteration's start time if no packets
 
         print(f"Number of packets to send: {len(arrival_times)}")
 
