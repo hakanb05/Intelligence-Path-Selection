@@ -166,16 +166,19 @@ class Router:
         self.delay_history.append(packet_delay)
 
     def process_data(self):
-        # Process data in the router's memory
         if self.memory_space > 0:
-            processed_data = min(self.processing_rate * self.packet_size, self.memory_space)
+            # Process a fixed amount of data per time unit
+            processed_data = self.processing_rate * self.packet_size
+            processed_data = min(processed_data, self.memory_space)
             self.memory_space -= processed_data
+            # Update queue length
             packets_processed = int(processed_data / self.packet_size)
             self.current_queue_length = max(0, self.current_queue_length - packets_processed)
-            print(f"{self.name} processed {processed_data} MB. Remaining memory: {self.memory_space}/{self.total_capacity}")
         else:
+            # No data to process
             self.memory_usage_history.append(self.memory_space)
             self.packet_loss_prob_history.append(self.packet_loss_prob)
+
 
     def adjust_probabilities(self, next_hop_name, combined_metric):
         # Custom reward system to adjust routing probabilities based on combined metric
@@ -183,6 +186,7 @@ class Router:
 
         # Update the probability for the next hop
         current_prob = self.routing_probabilities[next_hop_name]
+        #Gradiend descent
         updated_prob = current_prob + learning_rate * (combined_metric - current_prob)
 
         # Ensure the probability stays within [0.1, 0.9]
@@ -220,13 +224,16 @@ def send_metrics_back(path, packet_delay):
                         packet_loss = packet_info['packet_loss']
                         delay = packet_info['delay']
 
-                        # Combine packet loss and delay into a metric
-                        if packet_loss:
-                            combined_metric = 0  # Worst case scenario
-                        else:
-                            # Normalize delay (assuming max_delay is predefined)
-                            normalized_delay = max_delay - min(delay, max_delay)
-                            combined_metric = normalized_delay / max_delay
+                        # Use packet_loss_prob from the router
+                        packet_loss_prob = next_hop.packet_loss_prob
+
+                        # Normalize delay
+                        normalized_delay = max_delay - min(delay, max_delay)
+                        delay_metric = normalized_delay / max_delay
+
+                        # Combined metric considering both packet loss probability and delay
+                        combined_metric = (1 - packet_loss_prob) * delay_metric
+
 
                         print(f"Combined metric for {next_hop_name}: {combined_metric:.4f}")
 
@@ -270,7 +277,7 @@ router2 = Router(
     name='Router 2',
     bandwidth=90,
     transmission_rate=900,
-    total_capacity=10000,
+    total_capacity=520,
     processing_rate=100  # Higher processing rate
 )
 server_A = Router(
@@ -326,7 +333,7 @@ chosen_routers = []
 reward_over_time = []
 
 # Define maximum expected delay (for normalization)
-max_delay = 5  # Adjust based on expected maximum delay in the network
+max_delay = 0.5  # Adjust based on expected maximum delay in the network
 
 # Function to simulate network traffic and Smart Router's learning
 # Function to simulate network traffic with Poisson and Exponential distributions
@@ -358,8 +365,9 @@ def simulate_traffic(num_iterations):
         else:
             current_time += total_time  # Move to the next iteration's start time if no packets
 
-        print(f"Number of packets to send: {len(arrival_times)}")
-        print("arrival times: \n" + str(arrival_times))
+        # commment out
+        # print(f"Number of packets to send: {len(arrival_times)}")
+        # print("arrival times: \n" + str(arrival_times))
 
         # Simulate sending the packets at their arrival times
         for packet_time in arrival_times:
@@ -405,7 +413,7 @@ def simulate_traffic(num_iterations):
         current_time += total_time
 
 # Run the simulation
-simulate_traffic(1)
+simulate_traffic(25)
 
 # Plotting
 iterations = list(range(1, len(probabilities_over_time) + 1))
