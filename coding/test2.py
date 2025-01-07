@@ -22,26 +22,32 @@ class Router:
         self.name = name
         self.bandwidth = bandwidth
         self.transmission_rate = transmission_rate
-        self.total_capacity = total_capacity
-        self.memory_space = 0
-        self.processing_rate = processing_rate
+        self.total_capacity = total_capacity  # MB
+        self.memory_space = 0  # Current memory usage in MB
+        self.processing_rate = processing_rate  
         self.neighbors = []
         self.routing_table = {}
         self.node_type = node_type
         self.received_data = []
         self.packet_loss_prob = 0.0
+        
+        # Als dit de "Smart Router" is, krijgt-ie een routing_probabilities dict.
         if self.name == 'Smart Router':
             self.routing_probabilities = {}
+
         self.packet_loss_prob_history = []
         self.memory_usage_history = []
+        # Elk pakket is 50MB, dus buffer_capacity is total_capacity // 50
         self.buffer_capacity = int(total_capacity / 50)
         self.current_queue_length = 0
+        
         self.arrival_count = 0
         self.time_unit = 1
-        self.packet_size = 50
+        self.packet_size = 50  # MB
         self.time_elapsed = 0
         self.arrival_rate = 0
         self.last_arrival_time = 0
+
         self.delay_history = []
         self.reward_history = []
 
@@ -63,13 +69,12 @@ class Router:
                 print(f"No route from {self.name} to {destination.name}")
 
     def simulate_packet_loss(self):
-        service_rate = self.processing_rate
-        arrival_rate = self.arrival_rate
-
-        if service_rate == 0:
+        if self.processing_rate == 0:
             service_rate = 1e-6
+        else:
+            service_rate = self.processing_rate
 
-        rho = arrival_rate / service_rate
+        rho = self.arrival_rate / service_rate
         rho = min(rho, 0.999)
 
         K = self.buffer_capacity
@@ -81,17 +86,15 @@ class Router:
         is_packet_lost = random.random() < self.packet_loss_prob
         if is_packet_lost and self.current_queue_length > 0:
             self.current_queue_length -= 1
-
         return is_packet_lost
 
     def calculate_queuing_delay(self):
-        service_rate = self.processing_rate
-        arrival_rate = self.arrival_rate
-
-        if service_rate == 0:
+        if self.processing_rate == 0:
             service_rate = 1e-6
+        else:
+            service_rate = self.processing_rate
 
-        rho = arrival_rate / service_rate
+        rho = self.arrival_rate / service_rate
         rho = min(rho, 0.999)
 
         if service_rate * (1 - rho) > 0:
@@ -101,6 +104,7 @@ class Router:
         return D_queue
 
     def receive_data(self, data_size, path, current_time):
+        # Als dit een router is, bereken arrival rate etc.
         if self.node_type == 'router':
             self.arrival_count += 1
             time_difference = current_time - self.last_arrival_time
@@ -120,12 +124,13 @@ class Router:
                 packet_loss = self.simulate_packet_loss()
                 self.packet_loss_prob_history.append(self.packet_loss_prob)
             else:
+                # Buffer vol => packet lost
                 packet_loss = True
                 self.packet_loss_prob = 1.0
                 self.packet_loss_prob_history.append(self.packet_loss_prob)
                 packet_delay = float('inf')
-
         else:
+            # server
             packet_loss = False
             packet_delay = 0
 
@@ -138,33 +143,68 @@ class Router:
         if packet_loss:
             print(f"Packet lost at {self.name}")
         else:
+            # Packet arrives in memory
             self.memory_space += data_size
-            print(f"{self.name} received data at time {current_time:.2f} with delay {packet_delay:.4f}. Memory usage: {self.memory_space}/{self.total_capacity}")
+            if (self.name != "Server B" and self.name != "Smart Router"):
+                print(f"{self.name} received data at time {current_time:.2f} "
+                    f"with delay {packet_delay:.4f}. "
+                    f"Memory usage: {self.memory_space}/{self.total_capacity}")
 
             if self.node_type == 'server' and self.name == 'Server B':
                 send_metrics_back(path + [self.name], packet_delay)
             else:
-                if 'Server B' in self.routing_table:
+                if ('Server B' in self.routing_table):
                     next_hop = self.routing_table['Server B']
                     next_hop.receive_data(data_size, path + [self.name], current_time + packet_delay)
+
         self.memory_usage_history.append(self.memory_space)
         self.delay_history.append(packet_delay)
 
     def process_data(self):
+        """
+        We override the default approach: 
+        - Router 1 processes 39MB each time it's called.
+        - Router 2 processes 43MB each time it's called.
+        - Smart Router or other nodes can keep the old approach or 
+          we define a custom approach for them as well.
+        """
         if self.memory_space > 0:
-            processed_data = self.processing_rate * self.packet_size
+            # Default processed_data
+            processed_data = 0
+
+            if self.name == 'Router 1':
+                # Router 1 processes 39 MB each time
+                processed_data = 39  
+            elif self.name == 'Router 2':
+                # Router 2 processes 43 MB each time
+                processed_data = 43 
+            else:
+                # Smart Router or other node => keep the old approach?
+                processed_data = self.processing_rate * self.packet_size
+
+            # We cannot process more than we have
             processed_data = min(processed_data, self.memory_space)
             self.memory_space -= processed_data
-            packets_processed = int(processed_data / self.packet_size)
-            self.current_queue_length = max(0, self.current_queue_length - packets_processed)
+
+            # Each 'processed_data' chunk corresponds to processed_data MB
+            # Because each 'packet' is 50MB, but we are ignoring partial packets logic here.
+            # If you want partial packets => you could interpret this differently.
+            # For now, we assume each MB is just data, no strict packet boundaries.
+
+            # Let's also reduce the queue_length accordingly
+            # If 'processed_data' is the number of MB removed, how many packets is that?
+            # We'll do integer division by 50 to see how many 'full' 50MB chunks are removed from the queue. 
+            # This is a simplificatie, want in real scenario is partial packet processing. 
+            full_packets_processed = int(processed_data // 50)  
+            self.current_queue_length = max(0, self.current_queue_length - full_packets_processed)
         else:
+            # No data to process => log
             self.memory_usage_history.append(self.memory_space)
             self.packet_loss_prob_history.append(self.packet_loss_prob)
 
     def adjust_probabilities(self, next_hop_name, combined_metric):
         global converged, convergence_stable_count, phase, phase_iteration
 
-        # If we are in inference phase, do not adjust probabilities
         if phase == 'inference':
             return
 
@@ -172,9 +212,7 @@ class Router:
         current_prob = self.routing_probabilities[next_hop_name]
         updated_prob = current_prob + learning_rate * (combined_metric - current_prob)
 
-        # Ensure the probability stays within [0.1, 0.9]
         updated_prob = min(max(updated_prob, 0.1), 0.9)
-
         diff = abs(updated_prob - current_prob)
 
         self.routing_probabilities[next_hop_name] = updated_prob
@@ -189,7 +227,6 @@ class Router:
             'reward': combined_metric
         })
 
-        # Check for convergence only after MIN_LEARNING_ITERATIONS
         if phase_iteration >= MIN_LEARNING_ITERATIONS:
             if diff < CONVERGENCE_THRESHOLD:
                 convergence_stable_count += 1
@@ -229,7 +266,6 @@ def send_metrics_back(path, packet_delay):
                         packet_info = next_hop.received_data[-1]
                         packet_loss = packet_info['packet_loss']
                         delay = packet_info['delay']
-
                         packet_loss_prob = next_hop.packet_loss_prob
 
                         normalized_delay = max_delay - min(delay, max_delay)
@@ -261,6 +297,7 @@ def send_metrics_back(path, packet_delay):
     else:
         print("Smart Router not found.")
 
+# Instantiate the network
 smart_router = Router(
     name='Smart Router',
     bandwidth=100,
@@ -274,15 +311,15 @@ router1 = Router(
     bandwidth=80,
     transmission_rate=800,
     total_capacity=420,
-    processing_rate=20
+    processing_rate=20  # We don't use this for the actual processing MB, but it's a param
 )
 
 router2 = Router(
     name='Router 2',
     bandwidth=90,
-    transmission_rate=9000,
-    total_capacity=5200,
-    processing_rate=1000
+    transmission_rate=90,
+    total_capacity=52,
+    processing_rate=10  # again, used in arrival rate calc, but we override memory processing
 )
 
 server_A = Router(
@@ -326,12 +363,6 @@ probabilities_over_time = []
 chosen_routers = []
 reward_over_time = []
 
-INFERENCE_ITERATIONS = 10
-MIN_LEARNING_ITERATIONS = 20
-
-phase = 'learning'
-phase_iteration = 0
-
 def simulate_traffic(num_iterations):
     global phase, phase_iteration, converged
     current_time = 0
@@ -342,8 +373,8 @@ def simulate_traffic(num_iterations):
         if phase == 'inference':
             if phase_iteration > INFERENCE_ITERATIONS:
                 switch_to_learning_phase()
-        # If learning phase and converged is True, we do not forcibly switch phases here,
-        # it happens in adjust_probabilities when stable.
+        # If learning phase and converged is True => we don't forcibly switch here
+        # the transition is triggered in adjust_probabilities
 
         total_time = 10
         lam = 5
@@ -361,6 +392,7 @@ def simulate_traffic(num_iterations):
         for packet_time in arrival_times:
             data_size = 50
             current_time = packet_time
+
             next_hop_name = random.choices(
                 population=['Router 1', 'Router 2'],
                 weights=[
@@ -369,19 +401,27 @@ def simulate_traffic(num_iterations):
                 ],
                 k=1
             )[0]
-            next_hop = router1 if next_hop_name == 'Router 1' else router2
+
+            if next_hop_name == 'Router 1':
+                next_hop = router1
+            else:
+                next_hop = router2
 
             smart_router.update_routing_table(destination=server_B, next_hop=next_hop)
 
+            # Server A sends data => smart router => ...
             server_A.send_data(smart_router, data_size, [], current_time)
 
-            for router in [smart_router, router1, router2, server_B]:
-                router.process_data()
+            # process data in all routers
+            for r in [smart_router, router1, router2, server_B]:
+                r.process_data()
 
         current_time += total_time
 
-simulate_traffic(10)
+# Run the simulation
+simulate_traffic(5)
 
+# Plot results
 iterations = list(range(1, len(probabilities_over_time) + 1))
 if iterations:
     prob_router1 = [prob[0] for prob in probabilities_over_time]
@@ -394,7 +434,7 @@ if iterations:
     plt.ylabel('Probability')
     plt.title('Routing Probabilities Over Time')
     plt.legend()
-    plt.show()  # Show the plot
+    plt.show()
 
     plt.figure(figsize=(10, 6))
     plt.plot(iterations, reward_over_time, label='Reward (Combined Metric)')
@@ -402,7 +442,7 @@ if iterations:
     plt.ylabel('Reward')
     plt.title('Reward Over Time')
     plt.legend()
-    plt.show()  # Show the plot
+    plt.show()
 
     plt.figure(figsize=(10, 6))
     router_choices = [1 if name == 'Router 1' else 2 for name in chosen_routers]
@@ -411,6 +451,6 @@ if iterations:
     plt.ylabel('Chosen Router')
     plt.yticks([1,2], ['Router 1', 'Router 2'])
     plt.title('Router Choices Over Time')
-    plt.show()  # Show the plot
+    plt.show()
 else:
     print("No data to plot.")
