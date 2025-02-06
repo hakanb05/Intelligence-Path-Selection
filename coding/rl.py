@@ -39,8 +39,8 @@ maxSimulationStages = 4  # Total phases possible (e.g. learning->inference->...)
 phaseLearning = "learning"
 phaseInference = "inference"
 
-baseDelayR1 = 1.2  # Router1's base propagation delay
-baseDelayR2 = 0.7  # Router2's base propagation delay (better one)
+baseDelayR1 = 0.95  # Router1's base propagation delay
+baseDelayR2 = 0.2  # Router2's base propagation delay (better one)
 
 # Logs
 probabilitiesLog = []  # List of (iteration, pRouter1, pRouter2)
@@ -84,14 +84,27 @@ class SmartRouter:
     """
     def __init__(self):
         self.routingProbabilities = {"Router1": 0.5, "Router2": 0.5}
-        self.learningRate = 0.1
+        self.learningRate = 0.23
 
     def chooseRouter(self):
-        r = random.random()
         pR1 = self.routingProbabilities["Router1"]
-        if r < pR1:
-            return "Router1"
-        return "Router2"
+        pR2 = self.routingProbabilities["Router2"]
+
+        # Add a little bit more probability for the router to choose, otherwise
+        # it will fluctuate between the two routers too much. This is only done
+        # for the sake of the simulation. We want to check sometimes the other
+        # router as well. Even if it has a smaller probability.
+        if pR1 > pR2:
+            pR1_adj = min(1.0, pR1 + 0.2)
+            pR2_adj = max(0.0, 1.0 - pR1_adj)  # Zorg ervoor dat de som 1 blijft
+        else:
+            pR2_adj = min(1.0, pR2 + 0.1)
+            pR1_adj = max(0.0, 1.0 - pR2_adj)
+
+        return random.choices(["Router1", "Router2"], weights=[pR1_adj, pR2_adj], k=1)[0]
+
+
+
 
     def updateProbability(self, chosenRouter, metricValue):
         """
@@ -151,7 +164,7 @@ class Environment:
     def runOneIteration(self, iterationIdx):
         # Adjust Router2 overhead to simulate network changes
         if 20 <= iterationIdx < 40:
-            self.router2.extraOverhead = 1.0
+            self.router2.extraOverhead = 2.3
         elif 40 <= iterationIdx < 60:
             self.router2.extraOverhead = 0.0
         elif 60 <= iterationIdx < 70:
@@ -165,7 +178,7 @@ class Environment:
         else:
             usedDelay = self.router2.getCurrentDelay()
 
-        baseFactor = 2.0
+        baseFactor = 2.5  # Maximum possible delay
         raw = 1.0 - (usedDelay / baseFactor)
         metricValue = max(0.0, min(1.0, raw))
 

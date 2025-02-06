@@ -1,3 +1,25 @@
+"""
+Name: Hakan Bektas
+Email: hakanbektas2@student.uva.nl / hakanbektas934@outlook.com
+University: University of Amsterdam
+
+Description:
+This simulation implements a Q-learning agent that learns to navigate a taxi.
+The agent learns to pick up a passenger and drop them off at the correct
+destination while avoiding penalties. The Q-learning algorithm is used to
+update the Q-values in a Q-table based on the rewards received.
+
+Experiment Overview:
+1. The agent is trained over 100,000 episodes to learn the optimal policy.
+2. After training, the agent's performance is evaluated over 100 episodes to
+   measure the average timesteps and penalties per episode.
+
+This was the first simulation I have written using Rl, the idea was to understand
+the main core idea of Reinforcement Learning. The simulation is based on the
+Taxi-v3 environment from OpenAI Gym. I have used online resources and
+documentation to understand and implement the Q-learning algorithm.
+"""
+
 import gymnasium as gym
 import numpy as np
 import random
@@ -6,10 +28,12 @@ import random
 env = gym.make('Taxi-v3', render_mode="rgb_array")
 env.reset()
 
-# Create a Q-table with zeros, dimensions are state space size by action space size
+# Create a Q-table with zeros, dimensions are state space size by action space
+# size
 q_table = np.zeros([env.observation_space.n, env.action_space.n])
 
-# Set the hyperparameters for learning rate (alpha), discount factor (gamma), and epsilon for exploration
+# Set the hyperparameters for learning rate (alpha), discount factor (gamma),
+# and epsilon for exploration
 alpha = 0.1
 gamma = 0.6
 epsilon = 0.1
@@ -23,7 +47,8 @@ for i in range(1, 100001):
     # Reset the environment and get the initial state
     state, _ = env.reset()
 
-    # Initialize variables for tracking the number of steps (epochs), penalties, and reward
+    # Initialize variables for tracking the number of steps (epochs), penalties,
+    # and reward
     epochs, penalties, reward = 0, 0, 0
     done = False
 
@@ -67,7 +92,8 @@ print("Training finished.\n")
 # Evaluate the agent's performance after training
 print("\nEvaluating the agent's performance after training...")
 
-# Initialize counters for total steps (epochs) and penalties across all evaluation episodes
+# Initialize counters for total steps (epochs) and penalties across all
+# evaluation episodes
 total_epochs, total_penalties = 0, 0
 episodes = 100
 
