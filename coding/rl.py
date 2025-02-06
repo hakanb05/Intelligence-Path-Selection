@@ -96,7 +96,7 @@ class SmartRouter:
         # router as well. Even if it has a smaller probability.
         if pR1 > pR2:
             pR1_adj = min(1.0, pR1 + 0.2)
-            pR2_adj = max(0.0, 1.0 - pR1_adj)  # Zorg ervoor dat de som 1 blijft
+            pR2_adj = max(0.0, 1.0 - pR1_adj)  # Keep the summation 1
         else:
             pR2_adj = min(1.0, pR2 + 0.1)
             pR1_adj = max(0.0, 1.0 - pR2_adj)
